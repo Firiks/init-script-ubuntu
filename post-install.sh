@@ -198,11 +198,10 @@ systemctl restart apache2
 # Mysql
 echo "Installing MYSQL"
 apt install -y mysql-server
-mysql_secure_installation
 systemctl start mysql.service
-mysql -e -u root "CREATE USER 'admin'@'localhost' IDENTIFIED BY 'admin123';"
-mysql -e -u root "GRANT ALL PRIVILEGES ON *.* TO 'admin'@'localhost';"
-mysql -e -u root "FLUSH PRIVILEGES;"
+mysql -u root -e "CREATE USER 'admin'@'localhost' IDENTIFIED BY 'admin123';"
+mysql -u root -e "GRANT ALL PRIVILEGES ON *.* TO 'admin'@'localhost';"
+mysql -u root -e "FLUSH PRIVILEGES;"
 
 # Vscode
 echo "Installing vscode"
@@ -234,7 +233,7 @@ snap remove --purge bare
 snap remove --purge core20
 snap remove --purge snapd
 rm -rf /var/cache/snapd/
-apt autoremove --purge snapd
+apt autoremove -y --purge snapd
 rm -rf /home/${system_user_name}/snap
 echo '
 Package: snapd
