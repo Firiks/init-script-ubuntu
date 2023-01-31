@@ -219,6 +219,11 @@ echo "deb https://deb.beekeeperstudio.io stable main" | tee /etc/apt/sources.lis
 apt update -y
 apt install -y beekeeper-studio
 
+# Compass
+echo "Installing MongoDB Compass"
+wget -O compass.deb https://downloads.mongodb.com/compass/mongodb-compass_1.35.0_amd64.deb
+gdebi -n compass.deb
+
 # Remove snaps
 echo "Removing snaps"
 systemctl disable snapd.service
