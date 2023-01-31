@@ -122,6 +122,7 @@ echo "Installing nodejs"
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 apt install -y nodejs
 apt install -y gcc g++ make
+npm update -g npm
 npm install -g yarn gulp
 
 # PHP & modules
@@ -192,7 +193,7 @@ echo '
 a2enmod php8.1
 a2ensite web.conf
 a2enmod rewrite
-systemctl restart apache
+systemctl restart apache2
 
 # Mysql
 echo "Installing MYSQL"
