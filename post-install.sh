@@ -43,7 +43,7 @@ apt install -y ubuntu-restricted-extras
 
 # essential packages & utils
 echo "Installing essential & utils"
-apt install -y software-properties-common apt-transport-https ca-certificates lsb-release gnupg wget curl net-tools network-manager-openvpn network-manager-openconnect-gnome synaptic gnome-shell-extensions gnome-tweaks chrome-gnome-shell tldr xclip htop terminator neofetch gdebi gdebi-core cmatrix trash-cli speedtest-cli gparted stow chkservice indicator-cpufreq ncdu glances bleachbit awscli wavemon keepass2
+apt install -y software-properties-common apt-transport-https ca-certificates lsb-release gnupg wget curl net-tools network-manager-openvpn network-manager-openconnect-gnome synaptic gnome-shell-extensions gnome-tweaks chrome-gnome-shell tldr xclip htop terminator neofetch gdebi gdebi-core cmatrix trash-cli speedtest-cli gparted stow chkservice ncdu glances bleachbit awscli wavemon keepass2
 
 # download tlrd entries
 tldr -u
