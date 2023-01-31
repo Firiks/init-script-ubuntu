@@ -45,14 +45,16 @@ apt install -y ubuntu-restricted-extras
 echo "Installing essential & utils"
 apt install -y software-properties-common apt-transport-https ca-certificates lsb-release gnupg wget curl net-tools network-manager-openvpn network-manager-openconnect-gnome synaptic gnome-shell-extensions gnome-tweaks chrome-gnome-shell tldr xclip htop terminator neofetch gdebi gdebi-core cmatrix trash-cli speedtest-cli gparted stow chkservice ncdu glances bleachbit awscli wavemon keepass2
 
-# download tlrd entries
-tldr -u
-
 # python
 echo "Installing python enviroment"
 apt install -y python3-pip
 apt install -y build-essential libssl-dev libffi-dev python3-dev
 apt install -y python3-venv
+
+# install java
+echo "Installing Open JDK 11"
+apt install -y default-jre
+java -version
 
 # openssh client
 echo "Installing openssh client"
@@ -72,11 +74,6 @@ ufw enable
 # extractors
 echo "Installing extractors"
 apt install -y unace rar unrar zip unzip p7zip-full p7zip-rar sharutils uudeview mpack arj cabextract file-roller
-
-# install java
-echo "Installing Open JDK 11"
-apt install -y default-jre
-java -version
 
 # android tools
 echo "Installing adb & fastboot"
