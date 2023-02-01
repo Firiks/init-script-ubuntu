@@ -167,7 +167,7 @@ mv wp-cli.phar /usr/local/bin/wp
 # echo "Installing NGINX"
 # apt install -y nginx php8.1-fpm
 
-# Apache
+# Apache - change USER_NAME to your user name
 echo "Installing Apache"
 apt install apache2 libapache2-mod-php8.1
 mkdir /home/${system_user_name}/web
@@ -177,7 +177,7 @@ echo '
   DocumentRoot /home/USER_NAME/web
   SetEnv APPLICATION_ENV "development"
   <Directory /home/USER_NAME/web>
-    Options +Indexes FollowSymLinks
+    Options Indexes FollowSymLinks
     DirectoryIndex index.php
     AllowOverride All
     Require all granted
