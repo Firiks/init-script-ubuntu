@@ -170,6 +170,7 @@ mv wp-cli.phar /usr/local/bin/wp
 # Apache
 echo "Installing Apache"
 apt install apache2 libapache2-mod-php8.1
+mkdir /home/${system_user_name}/web
 echo '
 <VirtualHost *:80>
   ServerAdmin webmaster@localhost
