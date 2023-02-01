@@ -170,28 +170,21 @@ mv wp-cli.phar /usr/local/bin/wp
 # Apache
 echo "Installing Apache"
 apt install apache2 libapache2-mod-php8.1
-groupadd webdev
-usermod -a -G webdev ${system_user_name}
-usermod -a -G webdev www-data
-mkdir /home/${system_user_name}/web && chgrp -R webdev /home/${system_user_name}/web
 echo '
-<VirtualHost *:8080>
-    ServerName localhost
-    DocumentRoot /home/${system_user_name}/web
-    <Directory /home/user/web>
-        Options Indexes FollowSymLinks
-        AllowOverride All
-        Require all granted
-    </Directory>
-    <FilesMatch \.php$>
-        SetHandler application/x-httpd-php8.1
-    </FilesMatch>
-    ErrorLog ${APACHE_LOG_DIR}/error.log
-    CustomLog ${APACHE_LOG_DIR}/access.log combined
-</VirtualHost>
-' > /etc/apache2/sites-available/web.conf
-a2enmod php8.1
-a2ensite web.conf
+<VirtualHost *:80>
+  ServerAdmin webmaster@localhost
+  DocumentRoot /home/USER_NAME/web
+  SetEnv APPLICATION_ENV "development"
+  <Directory /home/USER_NAME/web>
+    Options +Indexes FollowSymLinks
+    DirectoryIndex index.php
+    AllowOverride All
+    Require all granted
+  </Directory>
+
+  ErrorLog ${APACHE_LOG_DIR}/error.log
+  CustomLog ${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>' > /etc/apache2/sites-available/000-default.conf
 a2enmod rewrite
 systemctl restart apache2
 
