@@ -187,6 +187,7 @@ echo '
   CustomLog ${APACHE_LOG_DIR}/access.log combined
 </VirtualHost>' > /etc/apache2/sites-available/000-default.conf
 a2enmod rewrite
+apachectl configtest
 systemctl restart apache2
 
 # Mysql
@@ -316,6 +317,8 @@ fallocate -l 8G /swapfile
 chmod 600 /swapfile
 mkswap /swapfile
 swapon /swapfile
+cp /etc/fstab /etc/fstab.orig
+echo '/swapfile none swap sw 0 0' | tee -a /etc/fstab
 free -m
 
 # cleanup
