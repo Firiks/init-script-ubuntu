@@ -82,8 +82,8 @@ apt install -y android-tools-adb android-tools-fastboot
 # git
 echo "Installing git"
 apt -y install git
-git config --global user.name "$git_config_user_name"
-git config --global user.email $git_config_user_email
+sudo -u $system_user_name git config --global user.name "$git_config_user_name"
+sudo -u $system_user_name git config --global user.email $git_config_user_email
 
 # subversion
 echo "Installing subversion"
@@ -145,17 +145,6 @@ mv phpunit /usr/local/bin/phpunit
 # Xdebug
 echo "Installing Xdebug"
 apt install -y php-xdebug
-# TODO: config
-# [XDebug]
-# zend_extension=xdebug.so
-# xdebug.mode=debug,develop
-# xdebug.client_port=9003
-# xdebug.start_with_request=yes
-# xdebug.client_host=host.local
-# xdebug.log="/var/log/nginx/xdebug.log"
-# xdebug.idekey=XDEBUG_ECLIPSE # default for extensions
-# xdebug.discover_client_host=false
-# xdebug.start_with_request=trigger
 
 # WP-cli
 echo "Echo installing WP-cli"
@@ -163,11 +152,11 @@ curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.pha
 chmod +x wp-cli.phar
 mv wp-cli.phar /usr/local/bin/wp
 
-# Nginx
+# Nginx - run `nginx -t` to check config
 # echo "Installing NGINX"
 # apt install -y nginx php8.1-fpm
 
-# Apache - change USER_NAME to your user name
+# Apache - change USER_NAME to your user name, run `apachectl configtest` to check config
 echo "Installing Apache"
 apt install apache2 libapache2-mod-php8.1
 mkdir /home/${system_user_name}/web
@@ -320,6 +309,12 @@ swapon /swapfile
 cp /etc/fstab /etc/fstab.orig
 echo '/swapfile none swap sw 0 0' | tee -a /etc/fstab
 free -m
+
+# ZSH
+echo "Installing zsh"
+apt install -y zsh
+chsh -s $(which zsh)
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 
 # cleanup
 echo "Cleanup"
