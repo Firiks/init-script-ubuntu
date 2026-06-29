@@ -462,11 +462,10 @@ echo "Installing Gemini CLI"
 sudo -u $system_user_name bash -c \
   'export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh" && npm install -g @google/gemini-cli'
 
-# ─── aider — terminal AI pair-programmer ─────────────────────────────────────
+# ─── OpenCode ─────────────────────────────────────
 # Git-aware AI coding tool; installed as an isolated uv tool (uv installed earlier)
-echo "Installing aider"
-sudo -u $system_user_name bash -c \
-  'export PATH="$HOME/.local/bin:$PATH" && uv tool install aider-chat'
+echo "Installing OpenCode"
+curl -fsSL https://opencode.ai/install | bash
 
 # ─── Ollama — local LLM runtime ──────────────────────────────────────────────
 # Runs models locally/offline (llama, qwen, deepseek…); sets up a systemd service.
