@@ -680,12 +680,16 @@ fi
 # ─── Disable Error Reporting ─────────────────────────────────────────────────
 apt purge -y apport
 
+# Opt out of the Ubuntu install report FIRST, while metrics.ubuntu.com is still
+# reachable. Doing it after the blackhole below makes it POST to 127.0.0.1:443 and
+# log a (harmless) "connection refused". || true so no-network can't abort the run.
+echo "Opting out of Ubuntu telemetry (ubuntu-report)"
+ubuntu-report -f send no || true
+
 echo "Blackholing Ubuntu metrics/popcon hosts"
 for _h in www.metrics.ubuntu.com metrics.ubuntu.com www.popcon.ubuntu.com popcon.ubuntu.com; do
   grep -qxF "127.0.0.1 $_h" /etc/hosts || echo "127.0.0.1 $_h" >>/etc/hosts
 done
-
-ubuntu-report -f send no
 
 # ─── tmux config ─────────────────────────────────────────────────────────────
 echo "Writing tmux config"
