@@ -206,10 +206,32 @@ apt install -y android-tools-adb android-tools-fastboot
 
 # ─── Git ──────────────────────────────────────────────────────────────────────
 echo "Installing & configuring Git"
-apt install -y git
+apt install -y git git-lfs
 sudo -u $system_user_name git config --global user.name "$git_config_user_name"
 sudo -u $system_user_name git config --global user.email "$git_config_user_email"
+sudo -u $system_user_name git lfs install   # enable large-file support globally
 sudo -u $system_user_name git config --global init.defaultBranch master
+
+# ─── Dev Network & Debug Tools ────────────────────────────────────────────────
+#   dnsutils            dig/nslookup — DNS debugging
+#   whois/traceroute/mtr-tiny/nmap — network path & port debugging
+#   postgresql-client   psql CLI (the PHP pgsql driver is installed further down)
+#   mkcert              locally-trusted HTTPS certs for *.test dev domains
+echo "Installing dev network & debug tools"
+apt install -y dnsutils whois traceroute mtr-tiny nmap postgresql-client
+# mkcert best-effort (universe) — create + trust the local CA for the user
+if apt install -y mkcert libnss3-tools; then
+  sudo -u $system_user_name -H mkcert -install 2>/dev/null \
+    || echo "  ! mkcert -install failed — run it once as your user after reboot"
+else
+  echo "  ! mkcert unavailable — install later: apt install mkcert && mkcert -install"
+fi
+
+# ─── Timeshift — system snapshots ────────────────────────────────────────────
+# OS-level restore points (rsync/btrfs). Complements backup-home.sh (which only
+# covers /home). Configure schedule via the Timeshift GUI after reboot.
+echo "Installing Timeshift"
+apt install -y timeshift
 
 # ─── GitHub CLI ───────────────────────────────────────────────────────────────
 echo "Installing GitHub CLI (gh)"
@@ -259,7 +281,7 @@ echo "Installing NVM + Node LTS"
 sudo -u $system_user_name bash -c \
   'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash'
 sudo -u $system_user_name bash -c \
-  'export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh" && nvm install --lts && nvm alias default node && npm install -g yarn'
+  'export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh" && nvm install --lts && nvm alias default node && npm install -g yarn pnpm'
 
 # ─── PHP 8.3 via packages.sury.org ───────────────────────────────────────────
 # Ubuntu 26.04 ships PHP 8.5; we pin 8.3 for Laravel. Ondřej's packages moved off
@@ -504,6 +526,9 @@ flatpak install -y --noninteractive flathub com.discordapp.Discord
 flatpak install -y --noninteractive flathub md.obsidian.Obsidian         # Notes/wiki/docs
 flatpak install -y --noninteractive flathub com.usebruno.Bruno           # API client (replaces Insomnia)
 flatpak install -y --noninteractive flathub chat.rocket.RocketChat       # Team chat
+flatpak install -y --noninteractive flathub org.signal.Signal            # Signal messenger
+flatpak install -y --noninteractive flathub org.telegram.desktop         # Telegram
+flatpak install -y --noninteractive flathub com.spotify.Client           # Spotify
 
 # ─── Google Chrome ────────────────────────────────────────────────────────────
 install_deb_from_url "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb" "Google Chrome"
@@ -853,6 +878,8 @@ echo "  - MySQL: user 'admin' with the password you entered"
 echo "  - bat/fd: linked to ~/.local/bin (set your terminal font to 'FiraCode Nerd Font')"
 echo "  - AI CLIs: run 'claude' / 'codex' / 'gemini' to authenticate; aider via 'aider'"
 echo "  - Ollama: pull a model, e.g. 'ollama pull qwen2.5-coder'"
+echo "  - Timeshift: open it once to configure snapshot schedule + location"
+echo "  - mkcert: 'mkcert myapp.test' generates a trusted local HTTPS cert for Apache vhosts"
 echo "  - Firefox: privacy policies applied system-wide; verify prefs at about:policies"
 echo "    and about:config. If no profile existed at install, apply ~/firefox-user.js"
 echo "    by copying it into your profile dir as user.js (see about:profiles)."
