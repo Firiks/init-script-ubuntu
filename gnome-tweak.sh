@@ -32,6 +32,9 @@ gsettings set org.gnome.desktop.interface show-battery-percentage true
 # Hot corners — disable (triggers accidentally while coding)
 gsettings set org.gnome.desktop.interface enable-hot-corners false
 
+# Animations — disable (snappier UI, avoids overview/animation lag on VMs & weak GPUs)
+gsettings set org.gnome.desktop.interface enable-animations false
+
 # Touchpad — tap to click, natural scroll, two-finger scroll
 gsettings set org.gnome.desktop.peripherals.touchpad tap-to-click true
 gsettings set org.gnome.desktop.peripherals.touchpad natural-scroll true
@@ -138,7 +141,6 @@ install_ego() {
 install_ego "Caffeine"                     "caffeine@patapon.info"
 install_ego "Clipboard Indicator"          "clipboard-indicator@tudmotu.com"
 install_ego "Desktop Icons (NG)"           "ding@rastersoft.com" "desktop-icons@csoriano"
-install_ego "Impatience"                   "impatience@gfxmonk.net"
 install_ego "Lock Keys"                    "lockkeys@vaina.lt"
 install_ego "OpenWeather"                  "openweather-extension@jenslody.de" "openweatherrefined@penguin-teal.github.io"
 install_ego "Refresh Wifi Connections"     "refresh-wifi@kgshank.net"
@@ -147,7 +149,6 @@ install_ego "Vitals"                       "Vitals@CoreCoding.com"
 
 # --- A few extras worth having on a dev workstation ---
 install_ego "Tiling Shell"                 "tilingshell@ferrarodomenico.com"   # keyboard window tiling
-install_ego "Blur My Shell"                "blur-my-shell@aunetx"              # nicer panel/overview look
 install_ego "Alphabetical App Grid"        "AlphabeticalAppGrid@stuarthayhurst" # sort the app grid A–Z
 install_ego "Just Perfection"              "just-perfection-desktop@just-perfection" # fine-grained shell tweaks
 

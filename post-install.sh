@@ -13,6 +13,12 @@ fi
 # Avoid interactive prompts during package installs (EULAs, service restarts, etc.)
 export DEBIAN_FRONTEND=noninteractive
 
+# Make every apt call in this run wait for the dpkg lock instead of failing. `apt` waits up
+# to 120 s by default, `apt-get` not at all ("Could not get lock", exit 100), and the Docker
+# and Brave installers below call apt-get. The file goes again however the script exits.
+echo 'DPkg::Lock::Timeout "600";' > /etc/apt/apt.conf.d/99-post-install-lock
+trap 'rm -f /etc/apt/apt.conf.d/99-post-install-lock' EXIT
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 # Fresh Ubuntu runs apt-daily/unattended-upgrades on first boot, which holds the
 # dpkg lock. Wait for it to finish so our first apt call doesn't fail with
@@ -30,6 +36,19 @@ wait_for_apt() {
   done
 }
 
+apt_update() {
+  local i out rc
+  for i in $(seq 1 60); do
+    out=$(apt update 2>&1) && rc=0 || rc=$?
+    printf '%s\n' "$out"
+    [[ $rc -eq 0 ]] && return 0
+    grep -qE 'Could not get lock|Unable to lock' <<<"$out" || return "$rc"
+    echo "  apt lists are locked by another apt — retrying in 10 s ($i/60)"
+    sleep 10
+  done
+  return 1
+}
+
 # Abort early if there's no network — this script pulls from ~15 external sources.
 check_internet() {
   echo "Checking internet connectivity..."
@@ -45,12 +64,14 @@ install_deb_from_url() {
   local url="$1" name="${2:-package}" tmp
   tmp="$(mktemp --suffix=.deb)"
   echo "Downloading ${name}..."
+  # Best-effort, like the other optional apps: under set -e a `return 1` here stopped the
+  # whole script half-way (Tabby's version comes from the GitHub API, which rate-limits).
   if ! wget -qO "$tmp" "$url"; then
-    echo "Failed to download ${name} from ${url}"
+    echo "  ! Failed to download ${name} from ${url} — skipping"
     rm -f "$tmp"
-    return 1
+    return 0
   fi
-  gdebi -n "$tmp"
+  gdebi -n "$tmp" || echo "  ! ${name} did not install — skipping"
   rm -f "$tmp"
 }
 
@@ -83,7 +104,12 @@ mkdir -p "${USER_HOME}/Downloads" && cd "${USER_HOME}/Downloads"
 check_internet
 wait_for_apt
 echo "Updating system"
-apt update && apt dist-upgrade -y && apt autoremove -y && apt autoclean -y
+# One command per line: in `a && b` a failing `a` does NOT stop a set -e script, it only
+# skips `b`, so a broken repository meant no upgrade and no error.
+apt_update
+apt dist-upgrade -y
+apt autoremove -y
+apt autoclean -y
 
 # ─── CPU Microcode ────────────────────────────────────────────────────────────
 echo "Installing CPU microcode"
@@ -99,6 +125,9 @@ fi
 # ─── Restricted Extras ────────────────────────────────────────────────────────
 echo "Installing restricted extras (codecs, fonts)"
 apt install -y ubuntu-restricted-extras
+# ─── Software properties ──────────────────────────────────────────────────────
+# they dumped it for some reason https://itsfoss.com/news/ubuntu-software-and-updates-removal/
+apt install software-properties-gtk
 
 # ─── Essential Packages & CLI Utils ──────────────────────────────────────────
 echo "Installing essentials & CLI utils"
@@ -120,7 +149,9 @@ echo "Installing essentials & CLI utils"
 #   jq             command-line JSON processor
 #   direnv         per-directory environment variables
 #   meld           visual diff/merge tool
-#   shellcheck     shell-script linter (catches bugs like the '\'+comment one)
+#   ShellCheck     shell-script linter (catches bugs like the '\'+comment one)
+#                  (capitalised on purpose: a comment line starting "shellcheck" is read as
+#                  a shellcheck directive, and this one stopped it checking the file at all)
 #   shfmt          shell-script formatter
 #   flameshot      annotated screenshots
 #   copyq          clipboard history manager
@@ -155,7 +186,8 @@ sudo -u $system_user_name bash -c 'curl -LsSf https://astral.sh/uv/install.sh | 
 # ─── Pipx ─────────────────────────────────────────────────────────────
 echo "Installing pipx"
 apt install -y pipx
-pipx ensurepath
+# as the user: run as root it wrote the PATH line into /root/.bashrc and /root/.profile
+sudo -u $system_user_name pipx ensurepath
 
 # ─── Java (OpenJDK — default-jdk = compiler + tools, not just runtime) ────────
 echo "Installing Java (default-jdk)"
@@ -207,10 +239,16 @@ apt install -y android-tools-adb android-tools-fastboot
 # ─── Git ──────────────────────────────────────────────────────────────────────
 echo "Installing & configuring Git"
 apt install -y git git-lfs
-sudo -u $system_user_name git config --global user.name "$git_config_user_name"
-sudo -u $system_user_name git config --global user.email "$git_config_user_email"
-sudo -u $system_user_name git lfs install   # enable large-file support globally
-sudo -u $system_user_name git config --global init.defaultBranch master
+# With the dotfiles repo installed, ~/.gitconfig is a symlink into it, and --global would write
+# the identity through the link into the repo. Its .gitconfig includes ~/.gitconfig.local for
+# exactly this, so write there when the link is present.
+GIT_SCOPE=--global
+[[ -L ${USER_HOME}/.gitconfig ]] && GIT_SCOPE="--file ${USER_HOME}/.gitconfig.local"
+sudo -u $system_user_name git config $GIT_SCOPE user.name "$git_config_user_name"
+sudo -u $system_user_name git config $GIT_SCOPE user.email "$git_config_user_email"
+# large-file support for every user, in /etc/gitconfig: keeps its filter lines out of ~/.gitconfig
+git lfs install --system
+sudo -u $system_user_name git config $GIT_SCOPE init.defaultBranch master
 
 # ─── Dev Network & Debug Tools ────────────────────────────────────────────────
 #   dnsutils            dig/nslookup — DNS debugging
@@ -240,7 +278,8 @@ curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
   | tee /etc/apt/sources.list.d/github-cli.list
-apt update && apt install -y gh
+apt_update
+apt install -y gh
 
 # ─── Subversion ───────────────────────────────────────────────────────────────
 echo "Installing Subversion"
@@ -254,17 +293,24 @@ usermod -aG docker $system_user_name
 docker compose version
 
 # ─── Lazydocker ───────────────────────────────────────────────────────────────
-# TUI for Docker — browse containers, logs, images, volumes without typing commands 
-curl -fsSL https://raw.githubusercontent.com/jesseduffield/lazydocker/master/scripts/install_update_linux.sh | bash
+# TUI for Docker — browse containers, logs, images, volumes without typing commands
+# As the user: the installer puts it in $HOME/.local/bin, which as root was /root/.local/bin.
+sudo -u $system_user_name bash -c \
+  'curl -fsSL https://raw.githubusercontent.com/jesseduffield/lazydocker/master/scripts/install_update_linux.sh | bash'
 
 # ─── kubectl (pkgs.k8s.io — packages.cloud.google.com is deprecated) ─────────
 echo "Installing kubectl"
 install -m 0755 -d /etc/apt/keyrings   # dir may not exist on a clean install
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key \
+# pkgs.k8s.io has one repository per minor version, and v1.30 is long out of support.
+# Take the current stable minor (v1.37 in 2026-09); fall back to that if the lookup fails.
+K8S_MINOR=$(curl -fsSL https://dl.k8s.io/release/stable.txt | cut -d. -f1,2)
+K8S_MINOR=${K8S_MINOR:-v1.37}
+curl -fsSL "https://pkgs.k8s.io/core:/stable:/${K8S_MINOR}/deb/Release.key" \
   | gpg --batch --yes --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /' \
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${K8S_MINOR}/deb/ /" \
   | tee /etc/apt/sources.list.d/kubernetes.list
-apt update && apt install -y kubectl
+apt_update
+apt install -y kubectl
 
 # ─── Minikube ─────────────────────────────────────────────────────────────────
 curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
@@ -293,7 +339,7 @@ dpkg -i /tmp/debsuryorg-archive-keyring.deb
 rm -f /tmp/debsuryorg-archive-keyring.deb
 echo "deb [signed-by=/usr/share/keyrings/debsuryorg-archive-keyring.gpg] https://packages.sury.org/php/ $(lsb_release -sc) main" \
   > /etc/apt/sources.list.d/php.list
-apt update
+apt_update
 # Extension notes (comments kept off '\'-continued lines on purpose, see essentials block):
 #   bcmath ctype dom fileinfo mbstring tokenizer xml = Laravel core requirements
 #   curl=HTTP client/HTTP facade   gd/imagick=image processing   gmp=bignum   intl=i18n/Carbon
@@ -396,7 +442,13 @@ mv wp-cli.phar /usr/local/bin/wp
 # ─── Apache ───────────────────────────────────────────────────────────────────
 echo "Installing Apache"
 apt install -y apache2 libapache2-mod-php8.3
-mkdir -p ${USER_HOME}/web
+# Home directories are 750 on Ubuntu, so Apache (www-data) could not enter ~/web and every
+# request was "403 Forbidden". Give www-data traverse-only access to the home directory with an
+# ACL: it can reach ~/web but not list the home directory. Not by adding www-data to the user's
+# group: desktop users get umask 002, so that would let Apache (and every PHP app it serves)
+# write the user's group-writable files. Create ~/web as the user, not as root.
+sudo -u $system_user_name mkdir -p ${USER_HOME}/web
+setfacl -m u:www-data:--x ${USER_HOME}
 cat > /etc/apache2/sites-available/000-default.conf <<EOF
 <VirtualHost *:80>
   ServerAdmin webmaster@localhost
@@ -452,7 +504,8 @@ curl -fsSL https://deb.beekeeperstudio.io/beekeeper.key \
   | gpg --batch --yes --dearmor -o /usr/share/keyrings/beekeeper.gpg
 echo "deb [signed-by=/usr/share/keyrings/beekeeper.gpg] https://deb.beekeeperstudio.io stable main" \
   | tee /etc/apt/sources.list.d/beekeeper-studio-app.list
-apt update && apt install -y beekeeper-studio
+apt_update
+apt install -y beekeeper-studio
 
 # ─── MongoDB Compass ──────────────────────────────────────────────────────────
 install_deb_from_url "https://downloads.mongodb.com/compass/mongodb-compass_1.49.7_amd64.deb" "MongoDB Compass"
@@ -485,9 +538,10 @@ sudo -u $system_user_name bash -c \
   'export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh" && npm install -g @google/gemini-cli'
 
 # ─── OpenCode ─────────────────────────────────────
-# Git-aware AI coding tool; installed as an isolated uv tool (uv installed earlier)
+# Git-aware AI coding tool. Its installer puts it in $HOME/.opencode/bin and adds that to the
+# shell's rc file, so it runs as the user: run as root it landed in /root/.opencode.
 echo "Installing OpenCode"
-curl -fsSL https://opencode.ai/install | bash
+sudo -u $system_user_name bash -c 'curl -fsSL https://opencode.ai/install | bash'
 
 # ─── Ollama — local LLM runtime ──────────────────────────────────────────────
 # Runs models locally/offline (llama, qwen, deepseek…); sets up a systemd service.
@@ -680,20 +734,35 @@ echo "Installing media apps (vlc, ffmpeg, obs, qbittorrent)"
 apt install -y vlc ffmpeg obs-studio mediainfo mediainfo-gui qbittorrent
 
 # ─── Laptop & Thinkpad specific ──────────────────────────────────────────────────
-if [[ -f /sys/module/battery/initstate ]] || [[ -d /proc/acpi/battery/BAT0 ]]; then
+# Ask the power supply class, not /sys/module/battery/initstate: Ubuntu builds the battery
+# driver into the kernel (CONFIG_ACPI_BATTERY=y), so that file never exists and this block
+# never ran on any laptop. /proc/acpi/battery is long gone too.
+# TLP removes power-profiles-daemon (the desktop's power-mode menu) when it installs.
+# A wireless mouse or headset reports type=Battery too, with scope=Device; a laptop battery
+# has no scope or scope=System. Without that test a desktop PC with a wireless mouse got TLP.
+has_system_battery() {
+  local d
+  for d in /sys/class/power_supply/*; do
+    [[ $(cat "$d/type" 2>/dev/null) == Battery ]] || continue
+    [[ $(cat "$d/scope" 2>/dev/null) == Device ]] && continue
+    return 0
+  done
+  return 1
+}
+if has_system_battery; then
   echo "Battery detected — installing TLP + powertop"
   apt install -y tlp tlp-rdw powertop
 
-  # acpi-call lets TLP set charge thresholds
-  # (tp-smapi is for older ThinkPads)
+  # TLP 1.8 sets ThinkPad charge thresholds through the kernel's thinkpad_acpi
+  # (charge_control_*_threshold under /sys/class/power_supply/BAT0), or tp_smapi on an X201/T410
+  # and older. Its ThinkPad plugins never call acpi_call, so acpi-call-dkms is not installed: it
+  # was a DKMS module to rebuild for every kernel, doing nothing.
   if grep -qi "thinkpad" /sys/devices/virtual/dmi/id/product_family 2>/dev/null; then
-    echo "ThinkPad detected — installing acpi-call for charge threshold control"
-    apt install -y acpi-call-dkms
-    # Start charging at 40%, stop at 80% — good for plugged-in daily use
-    # Edit /etc/tlp.conf to adjust thresholds
-    cat >> /etc/tlp.conf <<EOF
-
-# ThinkPad battery charge thresholds
+    echo "ThinkPad detected — setting charge thresholds"
+    # A drop-in rather than appending to /etc/tlp.conf, which the package owns.
+    # Start charging below 40 %, stop at 95 % (the old comment said 80 %; the value was 95).
+    cat > /etc/tlp.d/50-thinkpad-battery.conf <<EOF
+# ThinkPad battery charge thresholds, written by post-install.sh
 START_CHARGE_THRESH_BAT0=40
 STOP_CHARGE_THRESH_BAT0=95
 EOF
@@ -718,6 +787,11 @@ done
 
 # ─── tmux config ─────────────────────────────────────────────────────────────
 echo "Writing tmux config"
+# Only if there is none. With the dotfiles repo installed, ~/.tmux.conf is a symlink into it,
+# and `cat >` would have overwritten the repo's own tmux.conf through the link.
+if [[ -e ${USER_HOME}/.tmux.conf || -L ${USER_HOME}/.tmux.conf ]]; then
+  echo "  ! ${USER_HOME}/.tmux.conf already exists — leaving it alone"
+else
 cat > ${USER_HOME}/.tmux.conf <<'EOF'
 # ─── General ──────────────────────────────────────────────────────────────────
 set -g default-terminal "tmux-256color"
@@ -786,6 +860,7 @@ set -g pane-active-border-style 'fg=colour81'
 bind r source-file ~/.tmux.conf \; display "tmux.conf reloaded!"
 EOF
 chown $system_user_name:$system_user_name ${USER_HOME}/.tmux.conf
+fi
 
 # ─── Document Templates ──────────────────────────────────────────────────────
 # Run as the user so files aren't root-owned (right-click → New Document menu)
@@ -803,15 +878,24 @@ sudo -u $system_user_name touch \
       ${USER_HOME}/Templates/.env
 
 # ─── Swap File (8GB) ─────────────────────────────────────────────────────────
-echo "Creating 8GB swap file"
-swapoff -a
-fallocate -l 8G /swapfile
-chmod 600 /swapfile
-mkswap /swapfile
-swapon /swapfile
-[[ -f /etc/fstab.orig ]] || cp /etc/fstab /etc/fstab.orig   # back up once, don't clobber on rerun
-grep -qxF '/swapfile none swap sw 0 0' /etc/fstab || echo '/swapfile none swap sw 0 0' | tee -a /etc/fstab
-free -m
+echo "Setting swap to 8GB"
+# The desktop installer already creates /swap.img (4 GB on the lab machine). Grow that one
+# instead of adding /swapfile beside it, which left two swap files in fstab.
+# On btrfs, fallocate'd swap files do not work at all.
+if [[ $(findmnt -no FSTYPE /) == btrfs ]]; then
+  echo "  ! / is btrfs — skipping (make one with: btrfs filesystem mkswapfile)"
+else
+  SWAPFILE=/swapfile
+  if grep -qE '^/swap\.img\s' /etc/fstab; then SWAPFILE=/swap.img; fi
+  swapoff "$SWAPFILE" 2>/dev/null || true
+  fallocate -l 8G "$SWAPFILE"
+  chmod 600 "$SWAPFILE"
+  mkswap "$SWAPFILE"
+  swapon "$SWAPFILE"
+  [[ -f /etc/fstab.orig ]] || cp /etc/fstab /etc/fstab.orig   # back up once, don't clobber on rerun
+  grep -qE "^$SWAPFILE\s" /etc/fstab || echo "$SWAPFILE none swap sw 0 0" | tee -a /etc/fstab
+  free -m
+fi
 
 # ─── ZSH + Oh My Zsh (robbyrussell) ─────────────────────────────────────────
 echo "Installing ZSH + Oh My Zsh"

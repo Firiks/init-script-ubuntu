@@ -29,7 +29,7 @@
 set -uo pipefail   # NOT -e: tar returns 1 on "file changed while reading", which is non-fatal
 
 # Resolve the target user even when run via sudo
-USER_NAME="${SUDO_USER:-$USER}"
+USER_NAME="${SUDO_USER:-${USER:-$(id -un)}}"
 HOME_DIR="$(getent passwd "$USER_NAME" | cut -d: -f6)"
 if [[ -z "$HOME_DIR" || ! -d "$HOME_DIR" ]]; then
   echo "Could not resolve home directory for user '$USER_NAME'." >&2
