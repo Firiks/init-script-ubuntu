@@ -1,17 +1,5 @@
 # Ubuntu post install script
 
-**Keywords:** workstation, desktop, development environment, post install script, ubuntu desktop,
-gnome, gnome tweaks, backup home, php dev, python dev, nodejs, apache dev, docker dev, terminal
-utilities, new laptop, apache 403 forbidden home directory, two swap files, lazydocker not found,
-opencode not found, tlp not installed laptop, Could not get lock, shellcheck directive, repair
-after post-install, fix earlier run, acpi-call-dkms, setfacl www-data
-
-**Verified:** reviewed line by line and with ShellCheck 0.11 on the 26.04 desktop VM, which had an
-earlier copy of this script run on it (2026-07-03); every download URL and repository checked
-for 26.04 (`resolute`); the lock handling, the swap, Apache and pipx fixes and the battery test
-run there behind a snapshot; `backup-home.sh` run with a full restore, 2026-09. The whole script
-was **not** run end to end on the current version.
-
 This script is intended to create development environment for PHP/Python/NodeJS with Apache/Nginx or Docker. It also installs some useful terminal utilities & applications.
 
 ## To run this script execute:
@@ -25,22 +13,12 @@ What it changes that you will notice afterwards: snapd is removed and pinned out
 from the mozillateam PPA, ufw is enabled with **default deny incoming** (allow ssh first if you
 need it), the login shell becomes zsh, and Ollama is installed as a service.
 
-Run it **before** installing [../dotfiles/](../dotfiles/). The nvm, uv, pipx and OpenCode
-installers append their PATH lines to `~/.bashrc`; the dotfiles install then moves that file to
-`~/.bashrc.orig`, and those lines belong in `~/.bash_local`. Run after the dotfiles, the script
-writes the git identity to `~/.gitconfig.local` (not through the `~/.gitconfig` symlink) and leaves
-`~/.tmux.conf` alone, but the installers' `~/.bashrc` lines land in the dotfiles repo: check with
-`git -C ~/Project/Linux diff dotfiles/`.
-
 ## For gnome tweaks do same:
 1. `chmod +x gnome-tweak.sh`
 2. `./gnome-tweak.sh`, as your normal user. **Not** with sudo: the script refuses to run as
    root, because gsettings under sudo would change root's settings, not yours.
 
 if you need to backup current system you can use `backup-home.sh` script. Usage is in comments at the top of the script.
-For what else to back up on a workstation, and restic as the scheduled alternative:
-[../workstation/05-backups.md](../workstation/05-backups.md).
-
 ## Fixes applied (2026-09)
 
 Found on the 26.04 desktop, where an earlier copy of the script had run:
@@ -133,8 +111,7 @@ grep swap /etc/fstab
 ```
 
 **No TLP.** It removes `power-profiles-daemon`, so the power-mode menu in the top bar loses its
-profiles ([workstation/03-hardware.md](../workstation/03-hardware.md#power-profiles-tlp-and-the-battery)).
-Do not add `acpi-call-dkms`: TLP 1.8 does not use it.
+profiles. Do not add `acpi-call-dkms`: TLP 1.8 does not use it.
 
 ```bash
 sudo apt install tlp tlp-rdw
@@ -151,7 +128,3 @@ sudo tlp-stat --config | grep CHARGE_THRESH
 cat /sys/class/power_supply/BAT0/charge_control_start_threshold \
     /sys/class/power_supply/BAT0/charge_control_end_threshold
 ```
-
-On a kernel installed by hand (a mainline build to fix resume, say), check that Ubuntu's kernel
-updates still boot:
-[workstation/02-kernels-and-drivers.md](../workstation/02-kernels-and-drivers.md#mainline-and-third-party-kernels).
